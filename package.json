@@ -1,0 +1,26 @@
+{
+  "name": "cex-as-promised",
+  "version": "1.0.0",
+  "description": "CEX.io API on a promise",
+  "main": "index.js",
+  "scripts": {
+    "test": "ava"
+  },
+  "keywords": [
+    "cexio",
+    "cex.io",
+    "bitcoin-on-toast"
+  ],
+  "author": "Scott Donnelly",
+  "license": "MIT",
+  "dependencies": {
+    "debug": "^2.6.8",
+    "querystring": "^0.2.0",
+    "request": "^2.81.0",
+    "request-promise": "^4.2.1",
+    "request-promise-native": "^1.0.4"
+  },
+  "devDependencies": {
+    "ava": "^0.19.1"
+  }
+}
