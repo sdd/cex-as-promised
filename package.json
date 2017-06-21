@@ -6,6 +6,10 @@
   "scripts": {
     "test": "ava"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdd/cex-as-promised.git"
+  },
   "keywords": [
     "cexio",
     "cex.io",
@@ -13,6 +17,10 @@
   ],
   "author": "Scott Donnelly",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sdd/cex-as-promised/issues"
+  },
+  "homepage": "https://github.com/sdd/cex-as-promised#readme",
   "dependencies": {
     "debug": "^2.6.8",
     "querystring": "^0.2.0",
@@ -22,5 +30,8 @@
   },
   "devDependencies": {
     "ava": "^0.19.1"
+  },
+  "engines": {
+    "node": ">=7.6"
   }
 }
