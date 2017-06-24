@@ -1,4 +1,5 @@
 'use strict';
+const _ = require('lodash');
 const request = require('request-promise-native');
 const crypto = require('crypto');
 const debug = require('debug');
@@ -25,12 +26,14 @@ class CEXIO {
     }
 
     _get (url, qs) {
-        console.log(url);
         const requestParams = Object.assign({}, defaultOptions, {
             qs,
-            url
+            url,
+            json: true
         });
-        return request(requestParams)
+        d(requestParams);
+
+        return request(requestParams);
     }
 
     _getPair (url, qs, ccy1 = this.ccy1, ccy2 = this.ccy2) {
@@ -43,7 +46,10 @@ class CEXIO {
             url,
             json: true
         });
-        requestParams.headers['Content-Length'] = body.length;
+        requestParams.headers = Object.assign({},
+            requestParams.headers,
+            { 'Content-Length': body.length }
+        );
 
         d(requestParams);
 
@@ -54,8 +60,8 @@ class CEXIO {
         }
     }
 
-    _postPair (url, body, ccy1 = this.ccy1, ccy2 = this.cct2) {
-        return this._post([url, ccy1, ccy2].join('/'), body);
+    _postPair (url, body, ccy1 = this.ccy1, ccy2 = this.ccy2) {
+        return this._postAuth([url, ccy1, ccy2].join('/'), body);
     }
 
     // PUBLIC API
@@ -75,8 +81,8 @@ class CEXIO {
         return this._postPair('convert', { amnt }, ccy1, ccy2);
     }
 
-    priceStats(hours = 24, maxItems = 200, ccy1, ccy2) {
-        return this._postPair('price_stats', { hours, maxRespArrSize: maxItems }, ccy1, ccy2);
+    priceStats(lastHours = 24, maxItems = 200, ccy1, ccy2) {
+        return this._postPair('price_stats', { lastHours, maxRespArrSize: maxItems }, ccy1, ccy2);
     }
 
     ohlcv(dateString, ccy1, ccy2) {
@@ -89,6 +95,9 @@ class CEXIO {
 
     // PRIVATE API
     _postAuth (path, params) {
+        d(path);
+        d(params);
+
         const nonce = Date.now();
 
         params = Object.assign({ nonce, key: this.key }, params);
@@ -111,7 +120,7 @@ class CEXIO {
 
     openOrders(ccy1, ccy2) {
         if (ccy1 && ccy2) {
-            return this._postAuthPair('open_orders', ccy1, ccy2);
+            return this._postAuthPair('open_orders', undefined, ccy1, ccy2);
         }
         return this._postAuth('open_orders');
     }
@@ -120,15 +129,33 @@ class CEXIO {
         return this._postAuth('active_orders_status', orderList);
     }
 
-    openPositions(ccy1 = this.ccy1, ccy2 = this.ccy2) {
-        return this._postAuthPair('open_positions', ccy1, ccy2);
+    async openPositions(ccy1 = this.ccy1, ccy2 = this.ccy2) {
+        const result = await this._postAuthPair('open_positions', undefined, ccy1, ccy2);
+
+        if (!result || result.ok !== 'ok') {
+            const err = new Error('Could not get open positions');
+            err.data = result;
+            throw err;
+        }
+
+        const res = result.data.map(pos =>
+            _.mapValues(pos, val => {
+                const floatVal = parseFloat(val);
+                if (floatVal === floatVal) { // !NaN
+                    return floatVal;
+                }
+                return val;
+            })
+        );
+
+        return res;
     }
 
     closePosition(id, ccy1 = this.ccy1, ccy2 = this.ccy2) {
         return this._postAuthPair('close_position', { id }, ccy1, ccy2);
     }
 
-    openPosition(args) {
+    async openPosition(args) {
         const {
             amount,
             symbol = this.ccy1,
@@ -141,18 +168,47 @@ class CEXIO {
         } = args;
 
         const params = {
-            amount: String(amount),
+            amount: max8dp(String(amount)),
             symbol,
             msymbol,
             ptype: ptype.toLowerCase(),
             anySlippage: anySlippage ? 'true' : 'false',
             leverage: String(leverage),
-            eoprice: String(eoprice),
-            stopLossPrice: stopLossPrice ? String(stopLossPrice) : undefined
+            eoprice: max8dp(String(eoprice)),
+            stopLossPrice: max8dp(stopLossPrice ? String(stopLossPrice) : undefined)
         };
 
-        return this._postAuthPair('open_position', params);
+        const result = await this._postAuthPair('open_position', params);
+
+        if (!result || result.ok !== 'ok') {
+            const err = new Error('Could not open position');
+            err.data = result;
+            throw err;
+        }
+
+        const res = _.mapValues(result.data, val => {
+            const floatVal = parseFloat(val);
+            if (floatVal === floatVal) { // !NaN
+                return floatVal;
+            }
+            return val;
+        });
+
+        return res;
     }
 }
 
 module.exports = CEXIO;
+
+function max8dp(str) {
+    if (str.indexOf('.') === -1) {
+        return str;
+    }
+    const dp = str.length - str.indexOf('.') - 1;
+
+    if (dp <= 8) {
+        return str;
+    }
+
+    return str.slice(0, str.indexOf('.') + 9);
+}
