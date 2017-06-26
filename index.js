@@ -31,13 +31,14 @@ class CEXIO {
             url,
             json: true
         });
+        d('GET: ');
         d(requestParams);
 
         return request(requestParams);
     }
 
     _getPair (url, qs, ccy1 = this.ccy1, ccy2 = this.ccy2) {
-        return this._get([url, ccy1, ccy2].join('/'), qs);
+        return this._get([url, ccy1, ccy2].join('/') + '/', qs);
     }
 
     _post (url, body) {
