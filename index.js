@@ -4,7 +4,6 @@ const request = require('request-promise-native');
 const crypto = require('crypto');
 const debug = require('debug');
 const d = debug('cexio');
-
 const querystring = require('querystring');
 
 const defaultOptions = {
@@ -139,17 +138,7 @@ class CEXIO {
             throw err;
         }
 
-        const res = result.data.map(pos =>
-            _.mapValues(pos, val => {
-                const floatVal = parseFloat(val);
-                if (floatVal === floatVal) { // !NaN
-                    return floatVal;
-                }
-                return val;
-            })
-        );
-
-        return res;
+        return parseObjectStrings(result.data);
     }
 
     closePosition(id, ccy1 = this.ccy1, ccy2 = this.ccy2) {
@@ -169,14 +158,14 @@ class CEXIO {
         } = args;
 
         const params = {
-            amount: max8dp(String(amount)),
+            amount: maxDpStr(String(amount)),
             symbol,
             msymbol,
             ptype: ptype.toLowerCase(),
             anySlippage: anySlippage ? 'true' : 'false',
             leverage: String(leverage),
-            eoprice: max8dp(String(eoprice)),
-            stopLossPrice: max8dp(stopLossPrice ? String(stopLossPrice) : undefined)
+            eoprice: maxDpStr(String(eoprice)),
+            stopLossPrice: maxDpStr(stopLossPrice ? String(stopLossPrice) : undefined)
         };
 
         const result = await this._postAuthPair('open_position', params);
@@ -187,29 +176,33 @@ class CEXIO {
             throw err;
         }
 
-        const res = _.mapValues(result.data, val => {
-            const floatVal = parseFloat(val);
-            if (floatVal === floatVal) { // !NaN
-                return floatVal;
-            }
-            return val;
-        });
-
-        return res;
+        return parseObjectStrings(result.data);
     }
 }
 
 module.exports = CEXIO;
 
-function max8dp(str) {
-    if (str.indexOf('.') === -1) {
-        return str;
-    }
-    const dp = str.length - str.indexOf('.') - 1;
+function maxDpStr(str = '', dp = 8) {
+    const val = parseFloat(str);
+    if (val !== val) { return str; } // NaN
+    return sprintf(`%.${ dp }f`, val);
+}
 
-    if (dp <= 8) {
-        return str;
+function parseObjectStrings(val) {
+    if (_.isArray(val)) {
+        return val.map(parseObjectStrings);
+    } else if (_.isObject(val)) {
+        return _.mapValues(val, parseObjectStrings);
+    } else if (typeof val === 'string') {
+        return transformString(val);
     }
+    return val;
+}
 
-    return str.slice(0, str.indexOf('.') + 9);
+function transformString(val) {
+    const floatVal = parseFloat(val);
+    if (floatVal === floatVal) { // !NaN
+        return floatVal;
+    }
+    return val;
 }
