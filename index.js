@@ -4,6 +4,7 @@ const request = require('request-promise-native');
 const crypto = require('crypto');
 const debug = require('debug');
 const d = debug('cexio');
+const sprintf = require('qprintf').sprintf;
 const querystring = require('querystring');
 
 const defaultOptions = {
@@ -16,12 +17,14 @@ const defaultOptions = {
 
 class CEXIO {
 
-    constructor({ ccy1, ccy2, clientId, key, secret } = {}) {
+    constructor({ ccy1, ccy2, clientId, key, secret } = {}, req = request) {
         this.clientId = clientId || process.env.CEXIO_CLIENT_ID;
         this.key      = key      || process.env.CEXIO_KEY;
         this.secret   = secret   || process.env.CEXIO_SECRET;
         this.ccy1     = ccy1     || process.env.CEXIO_CCY_1;
         this.ccy2     = ccy2     || process.env.CEXIO_CCY_2;
+
+        this.req = req;
     }
 
     _get (url, qs) {
@@ -33,7 +36,7 @@ class CEXIO {
         d('GET: ');
         d(requestParams);
 
-        return request(requestParams);
+        return this.req(requestParams);
     }
 
     _getPair (url, qs, ccy1 = this.ccy1, ccy2 = this.ccy2) {
@@ -54,7 +57,7 @@ class CEXIO {
         d(requestParams);
 
         try {
-            return request.post(requestParams);
+            return this.req.post(requestParams);
         } catch(e) {
             console.error(e);
         }
@@ -78,7 +81,7 @@ class CEXIO {
     }
 
     convert(amnt, ccy1, ccy2) {
-        return this._postPair('convert', { amnt }, ccy1, ccy2);
+        return this._postPair('convert', { amnt: maxDpStr(amnt) }, ccy1, ccy2);
     }
 
     priceStats(lastHours = 24, maxItems = 200, ccy1, ccy2) {
