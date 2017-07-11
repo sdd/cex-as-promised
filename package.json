@@ -1,6 +1,6 @@
 {
   "name": "cex-as-promised",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "CEX.io API on a promise",
   "main": "index.js",
   "scripts": {
