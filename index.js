@@ -1,54 +1,58 @@
 'use strict';
 const _ = require('lodash');
-const request = require('request-promise-native');
+const request = require('request-promise');
+const retry = require('p-retry');
 const crypto = require('crypto');
 const debug = require('debug');
 const d = debug('cexio');
 const sprintf = require('qprintf').sprintf;
 const querystring = require('querystring');
 
-const defaultOptions = {
+const defaultReqOptions = {
     baseUrl: 'https://cex.io/api/',
     headers: {
         'User-Agent': 'Mozilla/4.0 (Node.js CEXIO client)',
         'Content-Type': 'application/x-www-form-urlencoded'
-    }
+    },
+    json: true
+};
+
+const defaultRetryOptions = {
+    retries: 10,
+    factor: 2,
+    minTimeout: 500,
+    maxTimeout: 10000
 };
 
 class CEXIO {
 
-    constructor({ ccy1, ccy2, clientId, key, secret } = {}, req = request) {
+    constructor({ ccy1, ccy2, clientId, key, secret, retryOptions = {} } = {}, req) {
         this.clientId = clientId || process.env.CEXIO_CLIENT_ID;
         this.key      = key      || process.env.CEXIO_KEY;
         this.secret   = secret   || process.env.CEXIO_SECRET;
         this.ccy1     = ccy1     || process.env.CEXIO_CCY_1;
         this.ccy2     = ccy2     || process.env.CEXIO_CCY_2;
 
-        this.req = req;
+        const retryParams = Object.assign({}, defaultRetryOptions, retryOptions);
+        this.req = req || (params => retry(() => request(params), retryParams));
     }
 
-    _get (url, qs) {
-        const requestParams = Object.assign({}, defaultOptions, {
-            qs,
-            url,
-            json: true
-        });
-        d('GET: ');
+    async _get (url, qs) {
+        const requestParams = Object.assign({}, defaultReqOptions, { qs, url });
         d(requestParams);
 
-        return this.req(requestParams);
+        const res = await this.req(_.omitBy(requestParams, _.isUndefined));
+        if (!res || (res.ok && res.ok !== 'ok')) { throw new Error('result not ok'); }
+        return parseObjectStrings(res.data ? res.data : res);
     }
 
     _getPair (url, qs, ccy1 = this.ccy1, ccy2 = this.ccy2) {
-        return this._get([url, ccy1, ccy2].join('/') + '/', qs);
+        return this._get([url, ccy1, ccy2].join('/'), qs);
     }
 
     _post (url, body) {
-        const requestParams = Object.assign({}, defaultOptions, {
-            body,
-            url,
-            json: true
-        });
+        const requestParams = Object.assign({}, defaultReqOptions, { body, url, method: 'POST' });
+
         requestParams.headers = Object.assign({},
             requestParams.headers,
             { 'Content-Length': body.length }
@@ -56,11 +60,7 @@ class CEXIO {
 
         d(requestParams);
 
-        try {
-            return this.req.post(requestParams);
-        } catch(e) {
-            console.error(e);
-        }
+        return this.req(_.omitBy(requestParams, _.isUndefined));
     }
 
     _postPair (url, body, ccy1 = this.ccy1, ccy2 = this.ccy2) {
@@ -76,20 +76,40 @@ class CEXIO {
         return this._getPair('ticker');
     }
 
-    lastPrice() {
-        return this._getPair('last_price');
+    async lastPrice() {
+        const res = await this._getPair('last_price');
+        if (!res || !res.lprice) {
+            throw new Error('Unexpected response');
+        }
+        return parseFloat(res.lprice);
     }
 
-    convert(amnt, ccy1, ccy2) {
-        return this._postPair('convert', { amnt: maxDpStr(amnt) }, ccy1, ccy2);
+    async convert(amnt, ccy1, ccy2) {
+        const res = await this._postPair('convert', { amnt: maxDpStr(amnt) }, ccy1, ccy2);
+        if (!res || !res.amnt) {
+            throw new Error('Unexpected response');
+        }
+        return parseFloat(res.amnt);
     }
 
-    priceStats(lastHours = 24, maxItems = 200, ccy1, ccy2) {
-        return this._postPair('price_stats', { lastHours, maxRespArrSize: maxItems }, ccy1, ccy2);
+    async priceStats(lastHours = 24, maxItems = 200, ccy1, ccy2) {
+        const result = await this._postPair('price_stats', { lastHours, maxRespArrSize: maxItems }, ccy1, ccy2);
+        return parseObjectStrings(result);
     }
 
-    ohlcv(dateString, ccy1, ccy2) {
-        return this._getPair(`ohlcv/hd/${ dateString }`, ccy1, ccy2);
+    async ohlcv(dateString, ccy1, ccy2) {
+        const result = await this._getPair(`ohlcv/hd/${ dateString }`, ccy1, ccy2);
+
+        if (!result) {
+            const err = new Error('Could not get open orders');
+            err.data = result;
+            throw err;
+        }
+
+        return {
+            time: result.time,
+            data1m: JSON.parse(result.data1m)
+        };
     }
 
     orderBook(depth, ccy1, ccy2) {
@@ -109,7 +129,7 @@ class CEXIO {
         const hmac = crypto.createHmac('sha256', new Buffer(this.secret));
         hmac.update(message);
 
-        params.signature = hmac.digest("hex").toUpperCase();
+        params.signature = hmac.digest('hex').toUpperCase();
         return this._post(path, querystring.stringify(params));
     }
 
@@ -117,19 +137,43 @@ class CEXIO {
         return this._postAuth([path, ccy1, ccy2].join('/'), params);
     }
 
-    balance() {
-        return this._postAuth('balance/');
+    async balance() {
+        const result = await this._postAuth('balance/');
+
+        if (!result) {
+            const err = new Error('Could not get open orders');
+            err.data = result;
+            throw err;
+        }
+
+        return parseObjectStrings(result);
     }
 
-    openOrders(ccy1, ccy2) {
+    async openOrders(ccy1, ccy2) {
         if (ccy1 && ccy2) {
             return this._postAuthPair('open_orders', undefined, ccy1, ccy2);
         }
-        return this._postAuth('open_orders');
+        const result = await this._postAuth('open_orders');
+
+        if (!result) {
+            const err = new Error('Could not get open orders');
+            err.data = result;
+            throw err;
+        }
+
+        return parseObjectStrings(result);
     }
 
-    activeOrdersStatus(orderList) {
-        return this._postAuth('active_orders_status', orderList);
+    async activeOrdersStatus(orderList) {
+        const result = await this._postAuth('active_orders_status', { orders_list: orderList });
+
+        if (!result || result.ok !== 'ok') {
+            const err = new Error('Could not get active order statuses');
+            err.data = result;
+            throw err;
+        }
+
+        return parseObjectStrings(result.data);
     }
 
     async openPositions(ccy1 = this.ccy1, ccy2 = this.ccy2) {
@@ -144,8 +188,16 @@ class CEXIO {
         return parseObjectStrings(result.data);
     }
 
-    closePosition(id, ccy1 = this.ccy1, ccy2 = this.ccy2) {
-        return this._postAuthPair('close_position', { id }, ccy1, ccy2);
+    async closePosition(id, ccy1 = this.ccy1, ccy2 = this.ccy2) {
+        const result = await this._postAuthPair('close_position', { id }, ccy1, ccy2);
+
+        if (!result || result.ok !== 'ok') {
+            const err = new Error('Could not close position');
+            err.data = result;
+            throw err;
+        }
+
+        return parseObjectStrings(result.data);
     }
 
     async openPosition(args) {

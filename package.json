@@ -15,6 +15,7 @@
     "cex.io",
     "bitcoin-on-toast"
   ],
+  "ava": {},
   "author": "Scott Donnelly",
   "license": "MIT",
   "bugs": {
@@ -24,6 +25,7 @@
   "dependencies": {
     "debug": "^2.6.8",
     "lodash": "^4.17.4",
+    "p-retry": "^1.0.0",
     "qprintf": "^0.13.2",
     "querystring": "^0.2.0",
     "request": "^2.81.0",
@@ -31,7 +33,9 @@
     "request-promise-native": "^1.0.4"
   },
   "devDependencies": {
-    "ava": "^0.19.1"
+    "ava": "^0.19.1",
+    "nock": "^9.0.13",
+    "sinon": "^2.3.6"
   },
   "engines": {
     "node": ">=7.6"
