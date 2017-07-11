@@ -1,6 +1,6 @@
 # cex-as-promised
 
-Promised-based CEX.io API client
+async / promise-based CEX.io API client
 
 [![Build Status](https://travis-ci.org/sdd/cex-as-promised.svg?branch=master)](https://travis-ci.org/sdd/cex-as-promised)
 
@@ -18,14 +18,14 @@ const cexio = new CEXIO({
 	ccy1: 'BTC',
 	ccy2: 'EUR'
 });
+```
+Or pass any combination of the fields above and the following env vars:
 
-// or pass any combination of the fields above and the following env vars:
-
-
-CEXIO_CLIENT_ID;
-CEXIO_KEY;
-CEXIO_SECRET;
-CEXIO_CCY_1;
-CEXIO_CCY_2;
+```
+CEXIO_CLIENT_ID
+CEXIO_KEY
+CEXIO_SECRET
+CEXIO_CCY_1
+CEXIO_CCY_2
 
 ```
