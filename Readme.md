@@ -2,6 +2,8 @@
 
 Promised-based CEX.io API client
 
+[![Build Status](https://travis-ci.org/sdd/cex-as-promised.svg?branch=master)](https://travis-ci.org/sdd/cex-as-promised)
+
 Can be configured by environment vars as well as object passed to constructor
 
 
